@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: chess-study
+Version: 0.1.0
+Summary: Fetch Chess.com games, analyze with Stockfish, publish biggest blunders as Lichess Study chapters.
+Author: Craig Petersen
+Project-URL: Homepage, https://github.com/<YOUR_GITHUB_ORG>/chess-study
+Project-URL: Repository, https://github.com/<YOUR_GITHUB_ORG>/chess-study
+Project-URL: Issues, https://github.com/<YOUR_GITHUB_ORG>/chess-study/issues
+Keywords: chess,stockfish,lichess,chess.com,analysis,pgn
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Environment :: Console
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.31.0
+Requires-Dist: python-chess>=1.999

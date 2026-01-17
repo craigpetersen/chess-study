@@ -14,47 +14,6 @@ import os
 import sys
 from pathlib import Path
 from typing import List
-from pathlib import Path
-
-def _load_dotenv() -> None:
-    """
-    Best-effort .env loader.
-    Search order (first found wins per-variable via os.environ.setdefault):
-      1) current working directory: ./.env
-      2) script directory: <dir_of_this_file>/.env
-      3) user config: ~/.config/chess-study/.env
-    """
-    candidates = []
-
-    # 1) CWD
-    candidates.append(Path(os.getcwd()) / ".env")
-
-    # 2) script dir (works when running from repo root OR installed executable)
-    try:
-        candidates.append(Path(__file__).resolve().parent / ".env")
-    except Exception:
-        pass
-
-    # 3) user config
-    home = os.path.expanduser("~")
-    candidates.append(Path(home) / ".config" / "chess-study" / ".env")
-
-    for p in candidates:
-        try:
-            if not p.exists():
-                continue
-            with p.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip().strip('"').strip("'")
-                    os.environ.setdefault(k, v)
-        except Exception:
-            # best-effort; never hard fail
-            continue
 
 
 def _ensure_data_dir(data_dir: str) -> str:
@@ -89,7 +48,6 @@ def _require_username(u: str) -> str:
 
 
 def main() -> None:
-    _load_dotenv()
     ap = argparse.ArgumentParser(
         prog="chess_cli",
         description="One CLI for Chess.com analysis + Lichess study publishing.",
