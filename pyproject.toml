@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Fetch Chess.com games, analyze with Stockfish, publish biggest blunders as Lichess Study chapters."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "Craig Petersen" }]
 keywords = ["chess", "stockfish", "lichess", "chess.com", "analysis", "pgn"]
 classifiers = [
