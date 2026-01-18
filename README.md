@@ -1,186 +1,188 @@
-# Chess.com → Stockfish → Lichess Study (Blunder Chapters)
+# Chess-study → Chess.com → Stockfish → Lichess Study
 
-Pull your recent Chess.com games, run Stockfish locally to detect blunders/swingy moments, then publish the **biggest blunder per game** into a Lichess Study as “puzzle-like” chapters (position before the blunder, your move, and the engine best move as a variation).
+This tool:
+- downloads your recent games from Chess.com
+- analyzes them locally with Stockfish
+- uploads the biggest blunder per game into a Lichess Study as puzzle-like chapters
 
-This project is designed to work well on **Windows + WSL2** (recommended), and also on Linux/macOS.
+A “chapter” starts from the position before the mistake, shows your move, and includes the best move as a variation.
 
+## What gets generated
 
-## Files in this repo
+By default, files are written into `./data/`:
 
-- `chess_cli.py` — **single entrypoint CLI** (analyze / upload / sync)
-- `chesscom.py` — Chess.com fetch + Stockfish analysis (writes `./data/*`)
-- `lichess.py` — Lichess Study uploader (uploads chapters from `./data/blunders.csv`)
+- `data/summary.csv` — one row per game (includes Chess.com accuracy if provided)
+- `data/moves.csv` — one row per move (good for graphing)
+- `data/blunders.csv` — only moves that cross the blunder thresholds
+- `data/blunders.pgn` — the blunder puzzles as PGN
 
+## Commands
 
-## What it produces
+The installed command is:
 
-By default, generated artifacts go into `./data/`:
-
-- `data/summary.csv` — per-game summary (includes Chess.com accuracy if provided)
-- `data/moves.csv` — per-move timeline (FEN before/after, eval kind, win-prob swing) suitable for graphing
-- `data/blunders.csv` — only your “blunder” moves with FEN before/after + engine best move
-- `data/blunders.pgn` — one PGN “chapter” per blunder (start from FEN; mainline is your move; variation is best move)
-
-Publishing to Lichess uses `data/blunders.csv` and uploads **one chapter per game** (the biggest blunder for that game).
-
-
-## Prerequisites
-
-### 1) Python + uv
-- Python 3.11+
-- `uv` installed
-
-Install uv:
-- macOS/Linux:
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-- Windows (PowerShell):
-  ```powershell
-  winget install --id Astral.uv -e
-  ```
-
-Verify:
 ```bash
-uv --version
+chess-study --help
 ```
 
-### 2) Stockfish engine
-Stockfish is a native executable (not a pip package). Install it on the same OS environment where you run Python.
+The three main commands are:
 
-**Recommended (WSL2 Ubuntu/Debian):**
+- `chess-study analyze` — download + analyze
+- `chess-study upload-top` — upload the biggest blunder per game to Lichess
+- `chess-study sync` — analyze then upload
+
+## Install Stockfish (engine)
+
+Stockfish is a native program (not a Python package). Install it in the same environment where you run `chess-study`.
+
+### WSL2 (Ubuntu 20.04 and similar) recommended
+
+On older WSL2 distros, downloaded Stockfish binaries can fail with "GLIBC not found". The most reliable approach is to build from source.
+
+1) Install build tools:
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y stockfish
-which stockfish
+sudo apt-get install -y build-essential git
 ```
 
-**macOS (Homebrew):**
+2) Build Stockfish (AVX2 is correct for most modern CPUs):
+
+```bash
+git clone https://github.com/official-stockfish/Stockfish.git
+cd Stockfish/src
+
+make -j profile-build ARCH=x86-64-avx2
+```
+
+3) Install it on your PATH:
+
+```bash
+mkdir -p ~/.local/bin
+
+cp -f ./stockfish ~/.local/bin/stockfish
+chmod +x ~/.local/bin/stockfish
+
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+4) Verify:
+
+```bash
+stockfish
+# you should see: Stockfish 17.1 (or later)
+# type: quit
+```
+
+### macOS
+
 ```bash
 brew install stockfish
 ```
 
+## Install the chess-study CLI
 
-## Setup
+From the repo directory:
 
-From the project root:
-
-1) Create a virtual environment:
 ```bash
-uv python install 3.11
-uv venv --python 3.11
+uv tool install .
 ```
 
-2) Install dependencies:
+## Configuration (.env)
+
+Create a `.env` file (do not commit it):
+
 ```bash
-uv pip install requests python-chess
+CHESSCOM_USER=your_chesscom_username
+LICHESS_STUDY_ID=YourStudyId
+LICHESS_TOKEN=YourTokenWithStudyWrite
 ```
 
+Notes:
+- LICHESS_TOKEN must include `study:write`
+- LICHESS_STUDY_ID is the 8-character part of your study URL: `https://lichess.org/study/<THIS_PART>`
 
-## Configuration (environment variables)
+The CLI auto-loads `.env` from:
+- your current folder, or
+- `~/.config/chess-study/.env`
 
-Use environment variables for portability.
+Optional global config:
 
-Required for Lichess upload:
-- `LICHESS_TOKEN` — must include `study:write`
-- `LICHESS_STUDY_ID` — the 8-char ID from your Study URL, e.g. `https://lichess.org/study/<ID>`
-
-Optional convenience:
-- `CHESSCOM_USER` — your Chess.com username (used as the default for `analyze` / `sync`)
-
-Example `.env` (create locally; do not commit tokens):
 ```bash
-CHESSCOM_USER=crymeasong
-LICHESS_STUDY_ID=Z1HaMxbk
-LICHESS_TOKEN=__PASTE_TOKEN_HERE__
+mkdir -p ~/.config/chess-study
+cp .env ~/.config/chess-study/.env
 ```
-
-Load it (WSL/Linux/macOS):
-```bash
-set -a
-source .env
-set +a
-```
-
 
 ## Quick start
 
-### Analyze your last 10 games (writes to ./data)
+Analyze your most recent games and write `data/*`:
+
 ```bash
-uv run python chess_cli.py analyze --max-games 10 --depth 10
+chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300
 ```
 
-(You can still pass a username explicitly if you prefer)
+Upload the biggest blunder per game to Lichess:
+
 ```bash
-uv run python chess_cli.py analyze crymeasong --max-games 10 --depth 10
+chess-study upload-top --metric wp_loss --limit 10
 ```
 
-### Upload biggest blunder per game to your Lichess Study
+Run both steps in one command:
+
 ```bash
-uv run python chess_cli.py upload-top --metric wp_swing --limit 10
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10
 ```
 
-### One command: analyze + upload
-```bash
-uv run python chess_cli.py sync --max-games 10 --depth 10 --metric wp_swing --limit 10
-```
+## Understanding the metrics
 
+### cp_loss (centipawn loss vs best)
 
-## Useful examples
+A centipawn is 1/100 of a pawn. Bigger is worse.
 
-### Increase analysis depth (slower but usually better signal)
-```bash
-uv run python chess_cli.py analyze --max-games 10 --depth 12
-```
+For each of your moves, we compare:
 
-### Use a specific Stockfish binary (if not on PATH)
-```bash
-uv run python chess_cli.py analyze --stockfish /usr/games/stockfish --max-games 10 --depth 10
-```
+- the engine evaluation after the best move
+- versus after your move
 
-### Dry-run upload (show what would be uploaded without modifying your study)
-```bash
-uv run python chess_cli.py upload-top --metric wp_swing --limit 5 --dry-run
-```
+That difference is cp_loss. This is what we use to label moves as inaccuracy/mistake/blunder.
 
-### Upload by centipawn loss instead of swing
-```bash
-uv run python chess_cli.py upload-top --metric cp_loss --limit 10
-```
+### wp_loss (win-probability loss vs best)
 
+We also convert the evaluation into an approximate win probability and compute the same loss-vs-best idea.
 
-## Notes
+wp_loss is usually the best way to pick “the biggest blunder” because it is bounded (0 to 1) and stable.
 
-- `chess_cli.py analyze` and `sync` default the username from `CHESSCOM_USER`.
-- Upload does **not** delete or “clear” existing study chapters. (Keeping this simple avoids needing to resolve chapter IDs.)
-- The uploader leaves the PGN `[Site]` header empty so Lichess can set it to the chapter URL. Chess.com provenance is stored in `[Annotator]` instead.
+### wp_swing (win-probability swing before to after)
 
+This measures how much the eval bar moved from before your move to after your move.
+
+Big swings can happen on good tactical moves too, so wp_swing is great for finding interesting moments, but it is not the main blunder label.
+
+## Flags (reference)
+
+### chess-study analyze
+
+- `--max-games N`
+- `--depth N`
+- `--stockfish PATH` (optional)
+- `--data-dir DIR` (default `data`)
+- thresholds:
+  - `--inacc-cp N`
+  - `--mistake-cp N`
+  - `--blunder-cp N`
+
+### chess-study upload-top
+
+- `--metric wp_loss|cp_loss|wp_swing` (recommended: wp_loss)
+- `--limit N` (0 = all)
+- `--dry-run`
 
 ## Troubleshooting
 
-### Stockfish not found
-If you see:
-`FileNotFoundError: No such file or directory: 'stockfish'`
+- If Stockfish is not found: pass `--stockfish /path/to/stockfish`.
+- If you see GLIBC errors on WSL2: build from source as shown above.
+- If Lichess upload fails with HTTP 400: check token scope (`study:write`) and the study ID.
 
-Install Stockfish in your environment:
-```bash
-sudo apt-get install -y stockfish
-```
+## Security
 
-Or pass an explicit path:
-```bash
-uv run python chess_cli.py analyze --stockfish /usr/games/stockfish --max-games 10 --depth 10
-```
-
-### Lichess upload returns HTTP 400
-Most commonly:
-- Token missing `study:write`
-- Wrong Study ID
-- Study is not accessible to the token user
-
-Try uploading a minimal PGN chapter first, then re-run.
-
-
-## Security notes
-- Never commit `LICHESS_TOKEN` to git.
-- Prefer `.env` in `.gitignore` and a committed `.env.example` template.
+Never commit `.env` or tokens. Put `.env` in `.gitignore`.

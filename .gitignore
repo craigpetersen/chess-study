@@ -27,6 +27,8 @@ secrets.sh
 
 # ---- Generated outputs ----
 data/
+dist/
+build/
 *.csv
 *.pgn
 
@@ -36,3 +38,6 @@ data/
 # ---- Misc ----
 *.tmp
 *.swp
+
+# Git
+.git/

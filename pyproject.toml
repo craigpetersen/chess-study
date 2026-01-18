@@ -2,9 +2,9 @@
 name = "chess-study"
 version = "0.1.0"
 description = "Fetch Chess.com games, analyze with Stockfish, publish biggest blunders as Lichess Study chapters."
-readme = "README_UPDATED.md"
+readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = { text = "MIT" }
 authors = [{ name = "Craig Petersen" }]
 keywords = ["chess", "stockfish", "lichess", "chess.com", "analysis", "pgn"]
 classifiers = [
@@ -21,9 +21,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/<YOUR_GITHUB_ORG>/chess-study"
-Repository = "https://github.com/<YOUR_GITHUB_ORG>/chess-study"
-Issues = "https://github.com/<YOUR_GITHUB_ORG>/chess-study/issues"
+Homepage = "https://github.com/craigpetersen/chess-study"
+Repository = "https://github.com/craigpetersen/chess-study"
+Issues = "https://github.com/craigpetersen/chess-study/issues"
 
 [project.scripts]
 chess-study = "chess_cli:main"

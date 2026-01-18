@@ -3,9 +3,10 @@ Name: chess-study
 Version: 0.1.0
 Summary: Fetch Chess.com games, analyze with Stockfish, publish biggest blunders as Lichess Study chapters.
 Author: Craig Petersen
-Project-URL: Homepage, https://github.com/<YOUR_GITHUB_ORG>/chess-study
-Project-URL: Repository, https://github.com/<YOUR_GITHUB_ORG>/chess-study
-Project-URL: Issues, https://github.com/<YOUR_GITHUB_ORG>/chess-study/issues
+License: MIT
+Project-URL: Homepage, https://github.com/craigpetersen/chess-study
+Project-URL: Repository, https://github.com/craigpetersen/chess-study
+Project-URL: Issues, https://github.com/craigpetersen/chess-study/issues
 Keywords: chess,stockfish,lichess,chess.com,analysis,pgn
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.11
@@ -16,3 +17,192 @@ Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: requests>=2.31.0
 Requires-Dist: python-chess>=1.999
+
+# Chess-study → Chess.com → Stockfish → Lichess Study
+
+This tool:
+- downloads your recent games from Chess.com
+- analyzes them locally with Stockfish
+- uploads the biggest blunder per game into a Lichess Study as puzzle-like chapters
+
+A “chapter” starts from the position before the mistake, shows your move, and includes the best move as a variation.
+
+## What gets generated
+
+By default, files are written into `./data/`:
+
+- `data/summary.csv` — one row per game (includes Chess.com accuracy if provided)
+- `data/moves.csv` — one row per move (good for graphing)
+- `data/blunders.csv` — only moves that cross the blunder thresholds
+- `data/blunders.pgn` — the blunder puzzles as PGN
+
+## Commands
+
+The installed command is:
+
+```bash
+chess-study --help
+```
+
+The three main commands are:
+
+- `chess-study analyze` — download + analyze
+- `chess-study upload-top` — upload the biggest blunder per game to Lichess
+- `chess-study sync` — analyze then upload
+
+## Install Stockfish (engine)
+
+Stockfish is a native program (not a Python package). Install it in the same environment where you run `chess-study`.
+
+### WSL2 (Ubuntu 20.04 and similar) recommended
+
+On older WSL2 distros, downloaded Stockfish binaries can fail with "GLIBC not found". The most reliable approach is to build from source.
+
+1) Install build tools:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential git
+```
+
+2) Build Stockfish (AVX2 is correct for most modern CPUs):
+
+```bash
+git clone https://github.com/official-stockfish/Stockfish.git
+cd Stockfish/src
+
+make -j profile-build ARCH=x86-64-avx2
+```
+
+3) Install it on your PATH:
+
+```bash
+mkdir -p ~/.local/bin
+
+cp -f ./stockfish ~/.local/bin/stockfish
+chmod +x ~/.local/bin/stockfish
+
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+4) Verify:
+
+```bash
+stockfish
+# you should see: Stockfish 17.1 (or later)
+# type: quit
+```
+
+### macOS
+
+```bash
+brew install stockfish
+```
+
+## Install the chess-study CLI
+
+From the repo directory:
+
+```bash
+uv tool install .
+```
+
+## Configuration (.env)
+
+Create a `.env` file (do not commit it):
+
+```bash
+CHESSCOM_USER=your_chesscom_username
+LICHESS_STUDY_ID=YourStudyId
+LICHESS_TOKEN=YourTokenWithStudyWrite
+```
+
+Notes:
+- LICHESS_TOKEN must include `study:write`
+- LICHESS_STUDY_ID is the 8-character part of your study URL: `https://lichess.org/study/<THIS_PART>`
+
+The CLI auto-loads `.env` from:
+- your current folder, or
+- `~/.config/chess-study/.env`
+
+Optional global config:
+
+```bash
+mkdir -p ~/.config/chess-study
+cp .env ~/.config/chess-study/.env
+```
+
+## Quick start
+
+Analyze your most recent games and write `data/*`:
+
+```bash
+chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300
+```
+
+Upload the biggest blunder per game to Lichess:
+
+```bash
+chess-study upload-top --metric wp_loss --limit 10
+```
+
+Run both steps in one command:
+
+```bash
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10
+```
+
+## Understanding the metrics
+
+### cp_loss (centipawn loss vs best)
+
+A centipawn is 1/100 of a pawn. Bigger is worse.
+
+For each of your moves, we compare:
+
+- the engine evaluation after the best move
+- versus after your move
+
+That difference is cp_loss. This is what we use to label moves as inaccuracy/mistake/blunder.
+
+### wp_loss (win-probability loss vs best)
+
+We also convert the evaluation into an approximate win probability and compute the same loss-vs-best idea.
+
+wp_loss is usually the best way to pick “the biggest blunder” because it is bounded (0 to 1) and stable.
+
+### wp_swing (win-probability swing before to after)
+
+This measures how much the eval bar moved from before your move to after your move.
+
+Big swings can happen on good tactical moves too, so wp_swing is great for finding interesting moments, but it is not the main blunder label.
+
+## Flags (reference)
+
+### chess-study analyze
+
+- `--max-games N`
+- `--depth N`
+- `--stockfish PATH` (optional)
+- `--data-dir DIR` (default `data`)
+- thresholds:
+  - `--inacc-cp N`
+  - `--mistake-cp N`
+  - `--blunder-cp N`
+
+### chess-study upload-top
+
+- `--metric wp_loss|cp_loss|wp_swing` (recommended: wp_loss)
+- `--limit N` (0 = all)
+- `--dry-run`
+
+## Troubleshooting
+
+- If Stockfish is not found: pass `--stockfish /path/to/stockfish`.
+- If you see GLIBC errors on WSL2: build from source as shown above.
+- If Lichess upload fails with HTTP 400: check token scope (`study:write`) and the study ID.
+
+## Security
+
+Never commit `.env` or tokens. Put `.env` in `.gitignore`.

@@ -119,11 +119,12 @@ def analyze_game_pgn(
     my_color_str: str,
 ) -> tuple[dict, list[dict], list[dict], list[chess.pgn.Game]]:
     """
-    Returns:
-      - summary stats for *your moves only*
-      - move_rows: one row per ply (for graphing eval bar swing)
-      - blunder_rows: one row per blunder (with FEN before/after + best move)
-      - blunder_games: PGN Games for each blunder (FEN setup + mainline + variation)
+    Correct blunder logic:
+      For your move at position P:
+        - best = engine.play(P)
+        - eval_best_after = engine.analyse(P + best)
+        - eval_played_after = engine.analyse(P + played)
+        - loss is computed vs best (from your perspective)
     """
     game = chess.pgn.read_game(io.StringIO(pgn_text))
     if game is None:
@@ -134,6 +135,7 @@ def analyze_game_pgn(
                 "mistakes": 0,
                 "blunders": 0,
                 "max_cp_loss": 0,
+                "max_wp_loss": 0.0,
                 "max_wp_swing": 0.0,
             },
             [],
@@ -145,6 +147,7 @@ def analyze_game_pgn(
 
     inaccuracies = mistakes = blunders = 0
     max_cp_loss = 0
+    max_wp_loss = 0.0
     max_wp_swing = 0.0
     plies_analyzed = 0
 
@@ -161,6 +164,7 @@ def analyze_game_pgn(
         fen_before = board.fen()
         move_number = board.fullmove_number
 
+        # Baseline eval for graphing (not used for blunder scoring)
         info_before = engine.analyse(board, chess.engine.Limit(depth=depth))
         eval_before = score_white(info_before)
         wp_before = win_prob_from_eval(eval_before)
@@ -170,56 +174,103 @@ def analyze_game_pgn(
 
         best_move_uci = ""
         best_move_san = ""
+        wp_best_after = ""
+        wp_played_after = ""
+        wp_loss = ""
+        cp_loss = ""
+        label = ""
+
+        eval_best_after = {"kind": "", "cp": "", "mate": ""}
+        eval_play_after = {"kind": "", "cp": "", "mate": ""}
+
         if is_my_move:
+            plies_analyzed += 1
+
+            # --- determine best move from the BEFORE position ---
             try:
                 best = engine.play(board, chess.engine.Limit(depth=depth))
                 if best.move is not None:
                     best_move_uci = best.move.uci()
                     best_move_san = safe_san(board, best.move)
             except Exception:
-                pass
+                best_move_uci = ""
+                best_move_san = ""
 
+            # --- eval after best and after played (same depth, same starting position) ---
+            try:
+                if best_move_uci:
+                    b_best = board.copy()
+                    b_best.push(chess.Move.from_uci(best_move_uci))
+                    info_best_after = engine.analyse(b_best, chess.engine.Limit(depth=depth))
+                    eb = score_white(info_best_after)
+                    eval_best_after = eb
+                    wp_best = win_prob_from_eval(eb)
+                    wp_best_after = f"{wp_best:.6f}"
+                else:
+                    wp_best = None
+            except Exception:
+                wp_best = None
+
+            try:
+                b_play = board.copy()
+                b_play.push(move)
+                info_play_after = engine.analyse(b_play, chess.engine.Limit(depth=depth))
+                ep = score_white(info_play_after)
+                eval_play_after = ep
+                wp_play = win_prob_from_eval(ep)
+                wp_played_after = f"{wp_play:.6f}"
+            except Exception:
+                wp_play = None
+
+            # compute wp_loss from your perspective
+            if wp_best is not None and wp_play is not None:
+                if my_color == chess.WHITE:
+                    loss_wp = max(0.0, wp_best - wp_play)
+                else:
+                    # as Black, you prefer LOWER white win prob
+                    loss_wp = max(0.0, wp_play - wp_best)
+                wp_loss = f"{loss_wp:.6f}"
+                max_wp_loss = max(max_wp_loss, loss_wp)
+
+            # compute cp_loss (only when both after-evals are cp)
+            if (
+                isinstance(eval_best_after, dict)
+                and isinstance(eval_play_after, dict)
+                and eval_best_after.get("kind") == "cp"
+                and eval_play_after.get("kind") == "cp"
+            ):
+                cp_best = int(eval_best_after["cp"])
+                cp_play = int(eval_play_after["cp"])
+
+                if my_color == chess.WHITE:
+                    loss_cp = max(0, cp_best - cp_play)
+                else:
+                    loss_cp = max(0, cp_play - cp_best)
+
+                cp_loss = int(loss_cp)
+                max_cp_loss = max(max_cp_loss, int(loss_cp))
+
+                if loss_cp >= blunder_cp:
+                    blunders += 1
+                    label = "blunder"
+                elif loss_cp >= mistake_cp:
+                    mistakes += 1
+                    label = "mistake"
+                elif loss_cp >= inacc_cp:
+                    inaccuracies += 1
+                    label = "inaccuracy"
+
+        # push played move to advance mainline
         board.push(move)
 
         fen_after = board.fen()
-
         info_after = engine.analyse(board, chess.engine.Limit(depth=depth))
         eval_after = score_white(info_after)
         wp_after = win_prob_from_eval(eval_after)
 
+        # purely for graphing: swing of the eval bar from before->after played
         wp_swing = abs(wp_after - wp_before)
         max_wp_swing = max(max_wp_swing, wp_swing)
-
-        cp_loss = ""
-        label = ""
-
-        if is_my_move:
-            plies_analyzed += 1
-
-            if eval_before["kind"] == "cp" and eval_after["kind"] == "cp":
-                cp_best_white = eval_before["cp"]
-                cp_after_white = eval_after["cp"]
-
-                if my_color == chess.WHITE:
-                    loss = cp_best_white - cp_after_white
-                else:
-                    loss = cp_after_white - cp_best_white
-
-                if loss < 0:
-                    loss = 0
-
-                cp_loss = int(loss)
-                max_cp_loss = max(max_cp_loss, int(loss))
-
-                if loss >= blunder_cp:
-                    blunders += 1
-                    label = "blunder"
-                elif loss >= mistake_cp:
-                    mistakes += 1
-                    label = "mistake"
-                elif loss >= inacc_cp:
-                    inaccuracies += 1
-                    label = "inaccuracy"
 
         move_rows.append(
             {
@@ -233,6 +284,8 @@ def analyze_game_pgn(
                 "move_uci": played_uci,
                 "side_to_move": "white" if side_to_move == chess.WHITE else "black",
                 "is_my_move": int(is_my_move),
+
+                # baseline eval before and after played (graphing)
                 "eval_before_kind": eval_before["kind"],
                 "eval_before_cp": eval_before["cp"] if eval_before["kind"] == "cp" else "",
                 "eval_before_mate": eval_before["mate"] if eval_before["kind"] == "mate" else "",
@@ -242,8 +295,22 @@ def analyze_game_pgn(
                 "wp_before": f"{wp_before:.6f}",
                 "wp_after": f"{wp_after:.6f}",
                 "wp_swing": f"{wp_swing:.6f}",
+
+                # correct blunder scoring vs best (only meaningful on your moves)
+                "best_move_san": best_move_san,
+                "best_move_uci": best_move_uci,
+                "eval_best_after_kind": eval_best_after.get("kind", "") if isinstance(eval_best_after, dict) else "",
+                "eval_best_after_cp": eval_best_after.get("cp", "") if isinstance(eval_best_after, dict) and eval_best_after.get("kind") == "cp" else "",
+                "eval_best_after_mate": eval_best_after.get("mate", "") if isinstance(eval_best_after, dict) and eval_best_after.get("kind") == "mate" else "",
+                "eval_played_after_kind": eval_play_after.get("kind", "") if isinstance(eval_play_after, dict) else "",
+                "eval_played_after_cp": eval_play_after.get("cp", "") if isinstance(eval_play_after, dict) and eval_play_after.get("kind") == "cp" else "",
+                "eval_played_after_mate": eval_play_after.get("mate", "") if isinstance(eval_play_after, dict) and eval_play_after.get("kind") == "mate" else "",
+                "wp_best_after": wp_best_after,
+                "wp_played_after": wp_played_after,
+                "wp_loss": wp_loss,
                 "cp_loss": cp_loss,
                 "label": label,
+
                 "fen_before": fen_before,
                 "fen_after": fen_after,
             }
@@ -262,21 +329,14 @@ def analyze_game_pgn(
                     "played_move_uci": played_uci,
                     "best_move_san": best_move_san,
                     "best_move_uci": best_move_uci,
-                    "eval_before_kind": eval_before["kind"],
-                    "eval_before_cp": eval_before["cp"] if eval_before["kind"] == "cp" else "",
-                    "eval_before_mate": eval_before["mate"] if eval_before["kind"] == "mate" else "",
-                    "eval_after_kind": eval_after["kind"],
-                    "eval_after_cp": eval_after["cp"] if eval_after["kind"] == "cp" else "",
-                    "eval_after_mate": eval_after["mate"] if eval_after["kind"] == "mate" else "",
-                    "wp_before": f"{wp_before:.6f}",
-                    "wp_after": f"{wp_after:.6f}",
-                    "wp_swing": f"{wp_swing:.6f}",
+                    "wp_loss": wp_loss,
                     "cp_loss": cp_loss,
                     "fen_before": fen_before,
                     "fen_after": fen_after,
                 }
             )
 
+            # PGN puzzle from pre-move position
             try:
                 puzzle_board = chess.Board(fen_before)
                 pgn_game = chess.pgn.Game()
@@ -298,7 +358,7 @@ def analyze_game_pgn(
 
                 played = chess.Move.from_uci(played_uci)
                 main = pgn_game.add_main_variation(played)
-                main.comment = f"Blunder. cp_loss={cp_loss} wp_swing={wp_swing:.3f}"
+                main.comment = f"Blunder vs best. cp_loss={cp_loss} wp_loss={wp_loss}"
 
                 if best_move_uci:
                     bestm = chess.Move.from_uci(best_move_uci)
@@ -315,6 +375,7 @@ def analyze_game_pgn(
         "mistakes": mistakes,
         "blunders": blunders,
         "max_cp_loss": max_cp_loss,
+        "max_wp_loss": max_wp_loss,
         "max_wp_swing": max_wp_swing,
     }
     return summary, move_rows, blunder_rows, blunder_games
@@ -444,7 +505,8 @@ def main():
                     "mistakes": stats["mistakes"],
                     "blunders": stats["blunders"],
                     "max_cp_loss": stats["max_cp_loss"],
-                    "max_wp_swing": f'{stats["max_wp_swing"]:.4f}',
+                    "max_wp_loss": f'{stats["max_wp_loss"]:.6f}',
+                    "max_wp_swing": f'{stats["max_wp_swing"]:.6f}',
                     "game_url": url,
                 }
             )
@@ -465,6 +527,7 @@ def main():
         "mistakes",
         "blunders",
         "max_cp_loss",
+        "max_wp_loss",
         "max_wp_swing",
         "game_url",
     ]
@@ -484,6 +547,7 @@ def main():
         "move_uci",
         "side_to_move",
         "is_my_move",
+
         "eval_before_kind",
         "eval_before_cp",
         "eval_before_mate",
@@ -493,8 +557,21 @@ def main():
         "wp_before",
         "wp_after",
         "wp_swing",
+
+        "best_move_san",
+        "best_move_uci",
+        "eval_best_after_kind",
+        "eval_best_after_cp",
+        "eval_best_after_mate",
+        "eval_played_after_kind",
+        "eval_played_after_cp",
+        "eval_played_after_mate",
+        "wp_best_after",
+        "wp_played_after",
+        "wp_loss",
         "cp_loss",
         "label",
+
         "fen_before",
         "fen_after",
     ]
@@ -514,15 +591,7 @@ def main():
         "played_move_uci",
         "best_move_san",
         "best_move_uci",
-        "eval_before_kind",
-        "eval_before_cp",
-        "eval_before_mate",
-        "eval_after_kind",
-        "eval_after_cp",
-        "eval_after_mate",
-        "wp_before",
-        "wp_after",
-        "wp_swing",
+        "wp_loss",
         "cp_loss",
         "fen_before",
         "fen_after",

@@ -3,8 +3,6 @@
 Unified CLI wrapper for:
 - Chess.com analysis (chesscom.py)
 - Lichess study upload (lichess.py)
-
-We intentionally do NOT include study clearing/deleting chapters.
 """
 
 from __future__ import annotations
@@ -126,7 +124,7 @@ def main() -> None:
     p_up.add_argument("--study", default=os.getenv("LICHESS_STUDY_ID", ""), help="Study ID (or env LICHESS_STUDY_ID)")
     p_up.add_argument("--token", default=os.getenv("LICHESS_TOKEN", ""), help="Token (or env LICHESS_TOKEN)")
     p_up.add_argument("--blunders-csv", default="", help="Path to blunders.csv (default: <data-dir>/blunders.csv)")
-    p_up.add_argument("--metric", choices=["wp_swing", "cp_loss"], default="wp_swing")
+    p_up.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="wp_loss")
     p_up.add_argument("--limit", type=int, default=0)
     p_up.add_argument("--sleep", type=float, default=0.6)
     p_up.add_argument("--dry-run", action="store_true")
@@ -140,7 +138,7 @@ def main() -> None:
     p_sy.add_argument("--user-agent", default="my-chess-analysis/0.1 (contact: you@example.com)")
     p_sy.add_argument("--study", default=os.getenv("LICHESS_STUDY_ID", ""), help="Study ID (or env LICHESS_STUDY_ID)")
     p_sy.add_argument("--token", default=os.getenv("LICHESS_TOKEN", ""), help="Token (or env LICHESS_TOKEN)")
-    p_sy.add_argument("--metric", choices=["wp_swing", "cp_loss"], default="wp_swing")
+    p_sy.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="wp_loss")
     p_sy.add_argument("--limit", type=int, default=0)
 
     args = ap.parse_args()
