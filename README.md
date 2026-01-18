@@ -124,13 +124,13 @@ chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --b
 Upload the biggest blunder per game to Lichess:
 
 ```bash
-chess-study upload-top --metric wp_loss --limit 10
+chess-study upload-top --metric wp_swing --limit 10
 ```
 
 Run both steps in one command:
 
 ```bash
-chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_swing --limit 10
 ```
 
 ## Understanding the metrics
