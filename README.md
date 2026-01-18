@@ -11,10 +11,6 @@ A “chapter” starts from the position before the mistake, shows your move, an
 
 ## Screenshots
 
-Add screenshots under `docs/images/` (create the folders if they don’t exist) and commit them.
-
-Recommended screenshots to include:
-
 1) **Terminal: analyze output**
 - ![Analyze output](docs/images/analyze-output.png)
 
