@@ -3,6 +3,9 @@
 Unified CLI wrapper for:
 - Chess.com analysis (chesscom.py)
 - Lichess study upload (lichess.py)
+- Terminal timelines (timeline.py)
+
+No study clearing/deleting chapters.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import os
 import sys
 from pathlib import Path
 from typing import List
-from pathlib import Path
+
 
 def _load_dotenv() -> None:
     """
@@ -23,17 +26,11 @@ def _load_dotenv() -> None:
       3) user config: ~/.config/chess-study/.env
     """
     candidates = []
-
-    # 1) CWD
     candidates.append(Path(os.getcwd()) / ".env")
-
-    # 2) script dir (works when running from repo root OR installed executable)
     try:
         candidates.append(Path(__file__).resolve().parent / ".env")
     except Exception:
         pass
-
-    # 3) user config
     home = os.path.expanduser("~")
     candidates.append(Path(home) / ".config" / "chess-study" / ".env")
 
@@ -51,7 +48,6 @@ def _load_dotenv() -> None:
                     v = v.strip().strip('"').strip("'")
                     os.environ.setdefault(k, v)
         except Exception:
-            # best-effort; never hard fail
             continue
 
 
@@ -62,11 +58,6 @@ def _ensure_data_dir(data_dir: str) -> str:
 
 
 def _run_module_main(module_name: str, argv: List[str]) -> int:
-    """
-    Import a module and run its `main()` as if called from CLI.
-
-    Assumes the module exposes a top-level main().
-    """
     mod = __import__(module_name, fromlist=["main"])
     if not hasattr(mod, "main"):
         raise SystemExit(f"Module {module_name} has no main()")
@@ -88,8 +79,9 @@ def _require_username(u: str) -> str:
 
 def main() -> None:
     _load_dotenv()
+
     ap = argparse.ArgumentParser(
-        prog="chess_cli",
+        prog="chess-study",
         description="One CLI for Chess.com analysis + Lichess study publishing.",
     )
     ap.add_argument(
@@ -115,9 +107,9 @@ def main() -> None:
     p_an.add_argument("--blunders-pgn", default="blunders.pgn")
 
     # thresholds
-    p_an.add_argument("--inacc-cp", type=int, default=50)
-    p_an.add_argument("--mistake-cp", type=int, default=100)
-    p_an.add_argument("--blunder-cp", type=int, default=200)
+    p_an.add_argument("--inacc-cp", type=int, default=75)
+    p_an.add_argument("--mistake-cp", type=int, default=150)
+    p_an.add_argument("--blunder-cp", type=int, default=300)
 
     # ---- upload-top ----
     p_up = sub.add_parser("upload-top", help="Upload biggest blunder per game to Lichess Study as chapters")
@@ -141,12 +133,21 @@ def main() -> None:
     p_sy.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="wp_loss")
     p_sy.add_argument("--limit", type=int, default=0)
 
+    # ---- timeline ----
+    p_tl = sub.add_parser("timeline", help="Show a colored move timeline per game from data/moves.csv")
+    p_tl.add_argument("--moves", default="", help="Path to moves.csv (default: <data-dir>/moves.csv)")
+    p_tl.add_argument("--limit", type=int, default=10)
+    p_tl.add_argument("--my-moves-only", action="store_true")
+    p_tl.add_argument("--no-color", action="store_true")
+    p_tl.add_argument("--dot", default="●")
+    p_tl.add_argument("--sep-every", type=int, default=5)
+    p_tl.add_argument("--show-positions", action="store_true")
+
     args = ap.parse_args()
     data_dir = _ensure_data_dir(args.data_dir)
 
     if args.cmd == "analyze":
         args.username = _require_username(args.username)
-
         argv = [
             args.username,
             "--data-dir",
@@ -204,13 +205,11 @@ def main() -> None:
 
     if args.cmd == "sync":
         args.username = _require_username(args.username)
-
         if not args.study:
             raise SystemExit("Missing --study (or env LICHESS_STUDY_ID).")
         if not args.token:
             raise SystemExit("Missing --token (or env LICHESS_TOKEN).")
 
-        # 1) analyze
         _run_module_main(
             "chesscom",
             [
@@ -225,10 +224,15 @@ def main() -> None:
                 args.stockfish,
                 "--user-agent",
                 args.user_agent,
+                "--inacc-cp",
+                str(getattr(args, "inacc_cp", 75)),
+                "--mistake-cp",
+                str(getattr(args, "mistake_cp", 150)),
+                "--blunder-cp",
+                str(getattr(args, "blunder_cp", 300)),
             ],
         )
 
-        # 2) upload-top
         blunders_csv = str(Path(data_dir) / "blunders.csv")
         up_argv = [
             "--study",
@@ -245,6 +249,31 @@ def main() -> None:
             up_argv += ["--limit", str(args.limit)]
         _run_module_main("lichess", up_argv)
         raise SystemExit(0)
+
+    if args.cmd == "timeline":
+        import timeline as tl  # local module
+
+        moves = args.moves or str(Path(data_dir) / "moves.csv")
+        tl_argv = [
+            "--data-dir",
+            data_dir,
+            "--moves",
+            moves,
+            "--limit",
+            str(args.limit),
+            "--dot",
+            args.dot,
+            "--sep-every",
+            str(args.sep_every),
+        ]
+        if args.my_moves_only:
+            tl_argv.append("--my-moves-only")
+        if args.no_color:
+            tl_argv.append("--no-color")
+        if args.show_positions:
+            tl_argv.append("--show-positions")
+
+        raise SystemExit(tl.main(tl_argv))
 
 
 if __name__ == "__main__":

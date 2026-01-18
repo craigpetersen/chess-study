@@ -1,4 +1,4 @@
-# Chess-study → Chess.com → Stockfish → Lichess Study
+# chess-study — Chess.com → Stockfish → Lichess Study
 
 This tool:
 - downloads your recent games from Chess.com
@@ -7,14 +7,18 @@ This tool:
 
 A “chapter” starts from the position before the mistake, shows your move, and includes the best move as a variation.
 
+---
+
 ## What gets generated
 
 By default, files are written into `./data/`:
 
 - `data/summary.csv` — one row per game (includes Chess.com accuracy if provided)
-- `data/moves.csv` — one row per move (good for graphing)
+- `data/moves.csv` — one row per move (good for graphing/debugging)
 - `data/blunders.csv` — only moves that cross the blunder thresholds
 - `data/blunders.pgn` — the blunder puzzles as PGN
+
+---
 
 ## Commands
 
@@ -24,11 +28,14 @@ The installed command is:
 chess-study --help
 ```
 
-The three main commands are:
+Main commands:
 
 - `chess-study analyze` — download + analyze
+- `chess-study timeline` — show a per-game “dot bar” timeline in the terminal (where mistakes/blunders occur)
 - `chess-study upload-top` — upload the biggest blunder per game to Lichess
-- `chess-study sync` — analyze then upload
+- `chess-study sync` — analyze then upload (and optionally show the timeline)
+
+---
 
 ## Install Stockfish (engine)
 
@@ -80,6 +87,8 @@ stockfish
 brew install stockfish
 ```
 
+---
+
 ## Install the chess-study CLI
 
 From the repo directory:
@@ -87,6 +96,15 @@ From the repo directory:
 ```bash
 uv tool install .
 ```
+
+If you’re iterating locally and want to be 100% sure changes are included, build + install from the wheel:
+
+```bash
+uv build --wheel
+uv tool install dist/*.whl --force
+```
+
+---
 
 ## Configuration (.env)
 
@@ -99,8 +117,8 @@ LICHESS_TOKEN=YourTokenWithStudyWrite
 ```
 
 Notes:
-- LICHESS_TOKEN must include `study:write`
-- LICHESS_STUDY_ID is the 8-character part of your study URL: `https://lichess.org/study/<THIS_PART>`
+- `LICHESS_TOKEN` must include `study:write`
+- `LICHESS_STUDY_ID` is the 8-character part of your study URL: `https://lichess.org/study/<THIS_PART>`
 
 The CLI auto-loads `.env` from:
 - your current folder, or
@@ -113,6 +131,8 @@ mkdir -p ~/.config/chess-study
 cp .env ~/.config/chess-study/.env
 ```
 
+---
+
 ## Quick start
 
 Analyze your most recent games and write `data/*`:
@@ -121,17 +141,58 @@ Analyze your most recent games and write `data/*`:
 chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300
 ```
 
-Upload the biggest blunder per game to Lichess:
+Show the terminal timeline (newest games first):
 
 ```bash
-chess-study upload-top --metric wp_swing --limit 10
+chess-study timeline --my-moves-only --limit 10
 ```
 
-Run both steps in one command:
+Upload the biggest blunder per game to Lichess (recommended metric: `wp_loss`):
 
 ```bash
-chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_swing --limit 10
+chess-study upload-top --metric wp_loss --limit 10
 ```
+
+Run analyze + upload in one command:
+
+```bash
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10
+```
+
+If your build supports it, show the timeline automatically after analyze/sync:
+
+```bash
+chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --show-timeline --timeline-limit 10
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10 --show-timeline --timeline-limit 10
+```
+
+(If `--show-timeline` isn’t recognized, update/reinstall to the latest wheel build.)
+
+---
+
+## Timeline command (terminal visualization)
+
+The timeline draws one dot per move (by default: **your moves only** when `--my-moves-only` is passed), with colors:
+
+- green: normal move
+- yellow: inaccuracy
+- orange: mistake
+- red: blunder
+
+Examples:
+
+```bash
+# show last 5 games, my moves only
+chess-study timeline --my-moves-only --limit 5
+
+# show positions of mistakes/blunders too
+chess-study timeline --my-moves-only --limit 5 --show-positions
+
+# ASCII-only view (no ANSI color)
+chess-study timeline --my-moves-only --limit 5 --no-color
+```
+
+---
 
 ## Understanding the metrics
 
@@ -141,22 +202,25 @@ A centipawn is 1/100 of a pawn. Bigger is worse.
 
 For each of your moves, we compare:
 
-- the engine evaluation after the best move
-- versus after your move
+- the engine evaluation after the **best move**
+- versus after **your move**
+(from the same starting position, at the same depth)
 
-That difference is cp_loss. This is what we use to label moves as inaccuracy/mistake/blunder.
+That difference is `cp_loss`. This is what we use to label moves as inaccuracy/mistake/blunder (via the cp thresholds).
 
 ### wp_loss (win-probability loss vs best)
 
 We also convert the evaluation into an approximate win probability and compute the same loss-vs-best idea.
 
-wp_loss is usually the best way to pick “the biggest blunder” because it is bounded (0 to 1) and stable.
+`wp_loss` is usually the best way to pick “the biggest blunder” because it is bounded (0 to 1) and stable.
 
-### wp_swing (win-probability swing before to after)
+### wp_swing (win-probability swing before→after)
 
 This measures how much the eval bar moved from before your move to after your move.
 
-Big swings can happen on good tactical moves too, so wp_swing is great for finding interesting moments, but it is not the main blunder label.
+Big swings can happen on good tactical moves too, so `wp_swing` is great for finding interesting moments, but it is not the main blunder label.
+
+---
 
 ## Flags (reference)
 
@@ -170,18 +234,43 @@ Big swings can happen on good tactical moves too, so wp_swing is great for findi
   - `--inacc-cp N`
   - `--mistake-cp N`
   - `--blunder-cp N`
+- optional timeline after analysis:
+  - `--show-timeline`
+  - `--timeline-limit N`
+  - `--timeline-no-color`
+
+### chess-study timeline
+
+- `--my-moves-only` (recommended)
+- `--limit N`
+- `--no-color`
+- `--sep-every N`
+- `--show-positions`
+- `--dot "●"` (change the dot glyph)
 
 ### chess-study upload-top
 
-- `--metric wp_loss|cp_loss|wp_swing` (recommended: wp_loss)
+- `--metric wp_loss|cp_loss|wp_swing` (recommended: `wp_loss`)
 - `--limit N` (0 = all)
 - `--dry-run`
+
+### chess-study sync
+
+- accepts the same flags as `analyze` + `upload-top`
+- optional:
+  - `--show-timeline`
+  - `--timeline-limit N`
+  - `--timeline-no-color`
+
+---
 
 ## Troubleshooting
 
 - If Stockfish is not found: pass `--stockfish /path/to/stockfish`.
-- If you see GLIBC errors on WSL2: build from source as shown above.
+- If you see GLIBC errors on WSL2: build Stockfish from source as shown above.
 - If Lichess upload fails with HTTP 400: check token scope (`study:write`) and the study ID.
+
+---
 
 ## Security
 
