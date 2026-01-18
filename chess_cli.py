@@ -94,7 +94,12 @@ def main() -> None:
 
     # ---- analyze ----
     p_an = sub.add_parser("analyze", help="Fetch games from Chess.com, run Stockfish, write data/*")
-    p_an.add_argument("username", nargs="?", default=os.getenv("CHESSCOM_USER", ""), help="Chess.com username (or env CHESSCOM_USER)")
+    p_an.add_argument(
+        "username",
+        nargs="?",
+        default=os.getenv("CHESSCOM_USER", ""),
+        help="Chess.com username (or env CHESSCOM_USER)",
+    )
     p_an.add_argument("--max-games", type=int, default=50)
     p_an.add_argument("--depth", type=int, default=12)
     p_an.add_argument("--stockfish", default="stockfish")
@@ -116,21 +121,32 @@ def main() -> None:
     p_up.add_argument("--study", default=os.getenv("LICHESS_STUDY_ID", ""), help="Study ID (or env LICHESS_STUDY_ID)")
     p_up.add_argument("--token", default=os.getenv("LICHESS_TOKEN", ""), help="Token (or env LICHESS_TOKEN)")
     p_up.add_argument("--blunders-csv", default="", help="Path to blunders.csv (default: <data-dir>/blunders.csv)")
-    p_up.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="wp_loss")
+    p_up.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="cp_loss")
     p_up.add_argument("--limit", type=int, default=0)
     p_up.add_argument("--sleep", type=float, default=0.6)
     p_up.add_argument("--dry-run", action="store_true")
 
     # ---- sync (analyze -> upload-top) ----
     p_sy = sub.add_parser("sync", help="Run analyze, then upload-top")
-    p_sy.add_argument("username", nargs="?", default=os.getenv("CHESSCOM_USER", ""), help="Chess.com username (or env CHESSCOM_USER)")
+    p_sy.add_argument(
+        "username",
+        nargs="?",
+        default=os.getenv("CHESSCOM_USER", ""),
+        help="Chess.com username (or env CHESSCOM_USER)",
+    )
     p_sy.add_argument("--max-games", type=int, default=50)
     p_sy.add_argument("--depth", type=int, default=12)
     p_sy.add_argument("--stockfish", default="stockfish")
     p_sy.add_argument("--user-agent", default="my-chess-analysis/0.1 (contact: you@example.com)")
+
+    # thresholds (FIX: these MUST exist on sync if you want to pass them)
+    p_sy.add_argument("--inacc-cp", type=int, default=75)
+    p_sy.add_argument("--mistake-cp", type=int, default=150)
+    p_sy.add_argument("--blunder-cp", type=int, default=300)
+
     p_sy.add_argument("--study", default=os.getenv("LICHESS_STUDY_ID", ""), help="Study ID (or env LICHESS_STUDY_ID)")
     p_sy.add_argument("--token", default=os.getenv("LICHESS_TOKEN", ""), help="Token (or env LICHESS_TOKEN)")
-    p_sy.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="wp_loss")
+    p_sy.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="cp_loss")
     p_sy.add_argument("--limit", type=int, default=0)
 
     # ---- timeline ----
@@ -210,6 +226,7 @@ def main() -> None:
         if not args.token:
             raise SystemExit("Missing --token (or env LICHESS_TOKEN).")
 
+        # 1) analyze
         _run_module_main(
             "chesscom",
             [
@@ -225,14 +242,15 @@ def main() -> None:
                 "--user-agent",
                 args.user_agent,
                 "--inacc-cp",
-                str(getattr(args, "inacc_cp", 75)),
+                str(args.inacc_cp),
                 "--mistake-cp",
-                str(getattr(args, "mistake_cp", 150)),
+                str(args.mistake_cp),
                 "--blunder-cp",
-                str(getattr(args, "blunder_cp", 300)),
+                str(args.blunder_cp),
             ],
         )
 
+        # 2) upload-top
         blunders_csv = str(Path(data_dir) / "blunders.csv")
         up_argv = [
             "--study",
@@ -251,7 +269,7 @@ def main() -> None:
         raise SystemExit(0)
 
     if args.cmd == "timeline":
-        import timeline as tl  # local module
+        import timeline as tl
 
         moves = args.moves or str(Path(data_dir) / "moves.csv")
         tl_argv = [

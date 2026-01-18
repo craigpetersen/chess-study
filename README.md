@@ -147,10 +147,10 @@ Show the terminal timeline (newest games first):
 chess-study timeline --my-moves-only --limit 10
 ```
 
-Upload the biggest blunder per game to Lichess (recommended metric: `wp_loss`):
+Upload the biggest blunder per game to Lichess (recommended metric: `wp_swing`):
 
 ```bash
-chess-study upload-top --metric wp_loss --limit 10
+chess-study upload-top --metric wp_swing --limit 10
 ```
 
 Run analyze + upload in one command:

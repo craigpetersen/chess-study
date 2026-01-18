@@ -44,18 +44,22 @@ def build_puzzle_pgn_from_row(row: dict) -> str:
     g = chess.pgn.Game()
     g.setup(board)
 
-    # IMPORTANT: leave Site empty so Lichess will set it to the chapter URL
+    # IMPORTANT: leave Site empty so Lichess can set it to the chapter URL
     g.headers["Site"] = ""
     g.headers["Event"] = "Biggest Blunder"
     g.headers["Date"] = (row.get("end_time_utc", "")[:10] or "????-??-??").replace("-", ".")
-    g.headers["Annotator"] = row.get("game_url", "")  # Chess.com provenance lives here
+    g.headers["Annotator"] = row.get("game_url", "")  # Chess.com provenance
     g.headers["White"] = "You" if row.get("my_color") == "white" else row.get("opponent", "Opponent")
     g.headers["Black"] = row.get("opponent", "Opponent") if row.get("my_color") == "white" else "You"
     g.headers["Result"] = "*"
 
     played = chess.Move.from_uci(played_uci)
     node_main = g.add_main_variation(played)
-    node_main.comment = f"Blunder. cp_loss={row.get('cp_loss','')} wp_swing={row.get('wp_swing','')}"
+
+    wp_loss = row.get("wp_loss", "")
+    wp_swing = row.get("wp_swing", "")
+    cp_loss = row.get("cp_loss", "")
+    node_main.comment = f"Blunder vs best. cp_loss={cp_loss} wp_loss={wp_loss} (wp_swing={wp_swing})"
 
     if best_uci:
         bestm = chess.Move.from_uci(best_uci)
@@ -92,12 +96,9 @@ def upload_top_blunders(
 
     picked = []
     for _, items in by_game.items():
-        key = (lambda x: parse_float(x.get("wp_swing", "0"))) if metric == "wp_swing" else (
-            lambda x: parse_float(x.get("cp_loss", "0"))
-        )
-        picked.append(max(items, key=key))
+        picked.append(max(items, key=lambda x: parse_float(x.get(metric, "0"))))
 
-    picked.sort(key=(lambda x: parse_float(x.get(metric, "0"))), reverse=True)
+    picked.sort(key=lambda x: parse_float(x.get(metric, "0")), reverse=True)
     if limit and len(picked) > limit:
         picked = picked[:limit]
 
@@ -130,7 +131,7 @@ def main():
 
     p_up = sub.add_parser("upload-top", help="Upload biggest blunder per game from blunders.csv")
     p_up.add_argument("--blunders-csv", default="data/blunders.csv")
-    p_up.add_argument("--metric", choices=["wp_swing", "cp_loss"], default="wp_swing")
+    p_up.add_argument("--metric", choices=["wp_loss", "cp_loss", "wp_swing"], default="cp_loss")
     p_up.add_argument("--limit", type=int, default=0)
     p_up.add_argument("--sleep", type=float, default=0.6)
     p_up.add_argument("--dry-run", action="store_true")
