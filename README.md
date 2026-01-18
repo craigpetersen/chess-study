@@ -9,6 +9,22 @@ A “chapter” starts from the position before the mistake, shows your move, an
 
 ---
 
+## Screenshots
+
+Add screenshots under `docs/images/` (create the folders if they don’t exist) and commit them.
+
+Recommended screenshots to include:
+
+1) **Terminal: analyze output**
+- ![Analyze output](docs/images/analyze-output.png)
+
+2) **Terminal: timeline view**
+- ![Timeline output](docs/images/timeline-output.png)
+
+3) **Lichess: created chapter**
+- ![Lichess chapter](docs/images/lichess-chapter.png)
+
+
 ## What gets generated
 
 By default, files are written into `./data/`:
@@ -31,7 +47,7 @@ chess-study --help
 Main commands:
 
 - `chess-study analyze` — download + analyze
-- `chess-study timeline` — show a per-game “dot bar” timeline in the terminal (where mistakes/blunders occur)
+- `chess-study timeline` — show a per-game “dot bar” timeline in the terminal
 - `chess-study upload-top` — upload the biggest blunder per game to Lichess
 - `chess-study sync` — analyze then upload (and optionally show the timeline)
 
@@ -147,49 +163,16 @@ Show the terminal timeline (newest games first):
 chess-study timeline --my-moves-only --limit 10
 ```
 
-Upload the biggest blunder per game to Lichess (recommended metric: `wp_swing`):
+Upload the biggest blunder per game to Lichess:
 
 ```bash
-chess-study upload-top --metric wp_swing --limit 10
+chess-study upload-top --metric cp_loss --limit 10
 ```
 
 Run analyze + upload in one command:
 
 ```bash
-chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10
-```
-
-If your build supports it, show the timeline automatically after analyze/sync:
-
-```bash
-chess-study analyze --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --show-timeline --timeline-limit 10
-chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric wp_loss --limit 10 --show-timeline --timeline-limit 10
-```
-
-(If `--show-timeline` isn’t recognized, update/reinstall to the latest wheel build.)
-
----
-
-## Timeline command (terminal visualization)
-
-The timeline draws one dot per move (by default: **your moves only** when `--my-moves-only` is passed), with colors:
-
-- green: normal move
-- yellow: inaccuracy
-- orange: mistake
-- red: blunder
-
-Examples:
-
-```bash
-# show last 5 games, my moves only
-chess-study timeline --my-moves-only --limit 5
-
-# show positions of mistakes/blunders too
-chess-study timeline --my-moves-only --limit 5 --show-positions
-
-# ASCII-only view (no ANSI color)
-chess-study timeline --my-moves-only --limit 5 --no-color
+chess-study sync --max-games 10 --depth 12 --inacc-cp 75 --mistake-cp 150 --blunder-cp 300 --metric cp_loss --limit 10
 ```
 
 ---
@@ -197,70 +180,19 @@ chess-study timeline --my-moves-only --limit 5 --no-color
 ## Understanding the metrics
 
 ### cp_loss (centipawn loss vs best)
-
 A centipawn is 1/100 of a pawn. Bigger is worse.
 
 For each of your moves, we compare:
-
 - the engine evaluation after the **best move**
 - versus after **your move**
 (from the same starting position, at the same depth)
 
 That difference is `cp_loss`. This is what we use to label moves as inaccuracy/mistake/blunder (via the cp thresholds).
 
-### wp_loss (win-probability loss vs best)
-
-We also convert the evaluation into an approximate win probability and compute the same loss-vs-best idea.
-
-`wp_loss` is usually the best way to pick “the biggest blunder” because it is bounded (0 to 1) and stable.
-
 ### wp_swing (win-probability swing before→after)
-
 This measures how much the eval bar moved from before your move to after your move.
 
 Big swings can happen on good tactical moves too, so `wp_swing` is great for finding interesting moments, but it is not the main blunder label.
-
----
-
-## Flags (reference)
-
-### chess-study analyze
-
-- `--max-games N`
-- `--depth N`
-- `--stockfish PATH` (optional)
-- `--data-dir DIR` (default `data`)
-- thresholds:
-  - `--inacc-cp N`
-  - `--mistake-cp N`
-  - `--blunder-cp N`
-- optional timeline after analysis:
-  - `--show-timeline`
-  - `--timeline-limit N`
-  - `--timeline-no-color`
-
-### chess-study timeline
-
-- `--my-moves-only` (recommended)
-- `--limit N`
-- `--no-color`
-- `--sep-every N`
-- `--show-positions`
-- `--dot "●"` (change the dot glyph)
-
-### chess-study upload-top
-
-- `--metric wp_loss|cp_loss|wp_swing` (recommended: `wp_loss`)
-- `--limit N` (0 = all)
-- `--dry-run`
-
-### chess-study sync
-
-- accepts the same flags as `analyze` + `upload-top`
-- optional:
-  - `--show-timeline`
-  - `--timeline-limit N`
-  - `--timeline-no-color`
 
 ---
 
