@@ -1,63 +1,56 @@
-# ---- Python ----
+# ─────────────────────────────────────────────
+# Secrets / environment files
+# ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# Common secret patterns
+secrets.sh
+*.secret
+*.secrets
+
+# ─────────────────────────────────────────────
+# Python caches / bytecode
+# ─────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
+# ─────────────────────────────────────────────
 # Virtual environments
+# ─────────────────────────────────────────────
 .venv/
 venv/
 ENV/
 env/
 
-# ---- OS / editor ----
+# ─────────────────────────────────────────────
+# Build / packaging artifacts
+# ─────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ─────────────────────────────────────────────
+# Project generated outputs
+# ─────────────────────────────────────────────
+data/
+*.csv
+*.pgn
+*.log
+
+# ─────────────────────────────────────────────
+# OS / editor
+# ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-
-# ---- Secrets / env files ----
-.env
-.env.*
-!.env.example
-
-# Shell secrets
-secrets.sh
-*.secret
-*.secrets
-
-# ---- Generated outputs ----
-data/
-dist/
-build/
-*.csv
-*.pgn
-
-# Logs
-*.log
-
-# ---- Misc ----
-*.tmp
 *.swp
-
-# Git
-.git/
-
-# Dependency manager
-.lock
-uv.lock
-
-.eggs/
-*.egg-info/
-dist/
-build/
-pip-wheel-metadata/
-.pytest_cache/
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
+*.tmp
